@@ -18,14 +18,15 @@
   <video id="video" autoplay playsinline></video>
   <button id="snap">Сканировать текст</button>
   <canvas id="canvas"></canvas>
-  <h2>Оригинал:</h2>
+  <h2>Оригинал (англ.):</h2>
   <pre id="original">—</pre>
-  <h2>Перевод:</h2>
+  <h2>Перевод (рус.):</h2>
   <pre id="translated">—</pre>
 
   <script>
     const video = document.getElementById('video');
 
+    // Старт камеры с задней
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -33,24 +34,18 @@
           audio: false
         });
         video.srcObject = stream;
-      } catch (err) {
-        console.warn('Exact facingMode не поддерживается, пробуем без exact.', err);
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" },
-            audio: false
-          });
-          video.srcObject = stream;
-        } catch (err2) {
-          alert('Не удалось включить заднюю камеру: ' + err2.message);
-        }
+      } catch {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false
+        });
+        video.srcObject = stream;
       }
     }
-
-    // стартуем камеру
     startCamera();
 
     document.getElementById('snap').addEventListener('click', async () => {
+      // 1) Снимок
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
@@ -58,7 +53,7 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataURL = canvas.toDataURL('image/png');
 
-      // OCR
+      // 2) OCR (английский)
       const { createWorker } = Tesseract;
       const worker = createWorker();
       await worker.load();
@@ -66,21 +61,28 @@
       await worker.initialize('eng');
       const { data: { text } } = await worker.recognize(dataURL);
       await worker.terminate();
-      document.getElementById('original').textContent = text.trim();
+      const original = text.trim();
+      document.getElementById('original').textContent = original || 'Не удалось распознать текст';
 
-      // Перевод
-      const apiKey = 'YOUR_API_KEY';
-      const res = await fetch(
-        'https://translation.googleapis.com/language/translate/v2?key=' + apiKey,
-        {
+      // 3) Перевод через LibreTranslate (англ -> рус)
+      try {
+        const res = await fetch('https://libretranslate.de/translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ q: text, target: 'ru', format: 'text' })
-        }
-      );
-      const json = await res.json();
-      document.getElementById('translated').textContent = json.data.translations[0].translatedText;
+          body: JSON.stringify({
+            q: original,
+            source: 'en',
+            target: 'ru',
+            format: 'text'
+          })
+        });
+        const { translatedText } = await res.json();
+        document.getElementById('translated').textContent = translatedText;
+      } catch (e) {
+        document.getElementById('translated').textContent = 'Ошибка перевода: ' + e.message;
+      }
     });
   </script>
 </body>
 </html>
+
