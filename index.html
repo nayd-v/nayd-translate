@@ -11,6 +11,7 @@
     button { margin-top: 8px; margin-right: 8px; }
     #canvas { display: none; }
   </style>
+  <!-- Tesseract.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/2.1.5/tesseract.min.js"></script>
 </head>
 <body>
@@ -85,25 +86,24 @@
       translateBtn.disabled = !lastText;
     }
 
-    // Функция перевода
+    // Функция перевода через Google Translate unofficial endpoint
     async function doTranslate() {
       if (!lastText) return;
       translateBtn.disabled = true;
       translatedEl.textContent = 'Перевод...';
 
       try {
-        const res = await fetch('https://libretranslate.de/translate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            q: lastText,
-            source: 'en',
-            target: 'ru',
-            format: 'text'
-          })
-        });
-        const { translatedText } = await res.json();
-        translatedEl.textContent = translatedText;
+        const url = 
+          'https://translate.googleapis.com/translate_a/single?client=gtx' +
+          '&sl=en&tl=ru&dt=t&q=' + encodeURIComponent(lastText);
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+
+        // data[0] — массив предложений, каждый элемент [перевод, оригинал, ...]
+        const translated = data[0].map(item => item[0]).join(' ');
+        translatedEl.textContent = translated || 'Пустой результат перевода';
       } catch (e) {
         translatedEl.textContent = 'Ошибка перевода: ' + e.message;
       } finally {
