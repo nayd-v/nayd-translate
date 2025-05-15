@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>OCR & Translate SPA</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; }
+    video { width: 100%; max-width: 400px; }
+    pre { background: #f4f4f4; padding: 8px; }
+    #snap { margin-top: 8px; }
+    #canvas { display: none; }
+  </style>
+  <!-- Tesseract.js с CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/2.1.5/tesseract.min.js"></script> <!-- :contentReference[oaicite:4]{index=4} -->
+</head>
+<body>
+  <h1>OCR & Translate в браузере</h1>
+  <video id="video" autoplay playsinline></video> <!-- захват с камеры -->
+  <button id="snap">Сканировать текст</button>
+  <canvas id="canvas"></canvas> <!-- для снимка кадра -->
+  <h2>Оригинал:</h2>
+  <pre id="original">—</pre>
+  <h2>Перевод:</h2>
+  <pre id="translated">—</pre>
+
+  <script>
+    // Доступ к камере (HTTPS required) :contentReference[oaicite:5]{index=5}
+    const video = document.getElementById('video');
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { alert('Ошибка доступа к камере: ' + err); });
+
+    document.getElementById('snap').addEventListener('click', async () => {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      // рисуем кадр из видео в canvas :contentReference[oaicite:6]{index=6}
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataURL = canvas.toDataURL('image/png');
+
+      // OCR с Tesseract.js :contentReference[oaicite:7]{index=7}
+      const { createWorker } = Tesseract;
+      const worker = createWorker();
+      await worker.load();
+      await worker.loadLanguage('eng');                // можно заменить 'eng' на нужный :contentReference[oaicite:8]{index=8}
+      await worker.initialize('eng');
+      const { data: { text } } = await worker.recognize(dataURL);
+      await worker.terminate();
+      document.getElementById('original').textContent = text.trim();
+
+      // Перевод через Google Translate API :contentReference[oaicite:9]{index=9}
+      // Замените YOUR_API_KEY на свой ключ
+      const apiKey = 'YOUR_API_KEY';
+      const res = await fetch(
+        'https://translation.googleapis.com/language/translate/v2?key=' + apiKey,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            q: text,
+            target: 'ru',
+            format: 'text'
+          })
+        }
+      );
+      const json = await res.json();
+      const translated = json.data.translations[0].translatedText;
+      document.getElementById('translated').textContent = translated;
+    });
+  </script>
+</body>
+</html>
