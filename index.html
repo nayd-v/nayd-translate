@@ -7,8 +7,8 @@
   <style>
     body { font-family: sans-serif; padding: 16px; }
     video { width: 100%; max-width: 400px; }
-    pre { background: #f4f4f4; padding: 8px; }
-    #snap { margin-top: 8px; }
+    pre { background: #f4f4f4; padding: 8px; min-height: 2em; }
+    button { margin-top: 8px; margin-right: 8px; }
     #canvas { display: none; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/2.1.5/tesseract.min.js"></script>
@@ -16,8 +16,13 @@
 <body>
   <h1>OCR & Translate в браузере</h1>
   <video id="video" autoplay playsinline></video>
-  <button id="snap">Сканировать текст</button>
   <canvas id="canvas"></canvas>
+
+  <div>
+    <button id="scanBtn">Сканировать текст</button>
+    <button id="translateBtn" disabled>Перевести</button>
+  </div>
+
   <h2>Оригинал (англ.):</h2>
   <pre id="original">—</pre>
   <h2>Перевод (рус.):</h2>
@@ -25,8 +30,14 @@
 
   <script>
     const video = document.getElementById('video');
+    const originalEl = document.getElementById('original');
+    const translatedEl = document.getElementById('translated');
+    const scanBtn = document.getElementById('scanBtn');
+    const translateBtn = document.getElementById('translateBtn');
 
-    // Старт камеры с задней
+    let lastText = ''; // сюда сохраняем результат OCR
+
+    // Старт камеры (задняя)
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -44,8 +55,14 @@
     }
     startCamera();
 
-    document.getElementById('snap').addEventListener('click', async () => {
-      // 1) Снимок
+    // Функция распознавания
+    async function doOCR() {
+      scanBtn.disabled = true;
+      originalEl.textContent = 'Распознавание...';
+      translatedEl.textContent = '—';
+      translateBtn.disabled = true;
+
+      // снимок кадра
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
@@ -53,7 +70,7 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataURL = canvas.toDataURL('image/png');
 
-      // 2) OCR (английский)
+      // OCR
       const { createWorker } = Tesseract;
       const worker = createWorker();
       await worker.load();
@@ -61,28 +78,41 @@
       await worker.initialize('eng');
       const { data: { text } } = await worker.recognize(dataURL);
       await worker.terminate();
-      const original = text.trim();
-      document.getElementById('original').textContent = original || 'Не удалось распознать текст';
 
-      // 3) Перевод через LibreTranslate (англ -> рус)
+      lastText = text.trim();
+      originalEl.textContent = lastText || 'Не удалось распознать текст';
+      scanBtn.disabled = false;
+      translateBtn.disabled = !lastText;
+    }
+
+    // Функция перевода
+    async function doTranslate() {
+      if (!lastText) return;
+      translateBtn.disabled = true;
+      translatedEl.textContent = 'Перевод...';
+
       try {
         const res = await fetch('https://libretranslate.de/translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            q: original,
+            q: lastText,
             source: 'en',
             target: 'ru',
             format: 'text'
           })
         });
         const { translatedText } = await res.json();
-        document.getElementById('translated').textContent = translatedText;
+        translatedEl.textContent = translatedText;
       } catch (e) {
-        document.getElementById('translated').textContent = 'Ошибка перевода: ' + e.message;
+        translatedEl.textContent = 'Ошибка перевода: ' + e.message;
+      } finally {
+        translateBtn.disabled = false;
       }
-    });
+    }
+
+    scanBtn.addEventListener('click', doOCR);
+    translateBtn.addEventListener('click', doTranslate);
   </script>
 </body>
 </html>
-
